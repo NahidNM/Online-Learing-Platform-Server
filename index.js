@@ -1,5 +1,5 @@
 const express = require('express');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 const cors = require('cors');
 const app = express();
@@ -52,12 +52,13 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
+
     // -------Mongobd Added database---------
 
     const allLearningCourses = client.db('OnlineLearningPlatform').collection('course');
     const addCourseCollection = client.db("OnlineLearningPlatform").collection("addCartCourse");
     const usersCollection = client.db("OnlineLearningPlatform").collection("LearningUsers");
-
+    const EnrollCollection = client.db("OnlineLearningPlatform").collection("CourseEnroll");
 
     // -----------jWT--------
 
@@ -66,6 +67,18 @@ async function run() {
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '5h' })
      res.send({token})
     })
+
+    // --------------------varify Instructor--------------------
+
+    const verifyInstructor = async(req, res, next) =>{
+      const email = req.decoded.email;
+      const quary = {email: email};
+      const user = await usersCollection.findOne(quary);
+      if(user?.role !== 'instructor'){
+        return res.status(403).send({error: true, message: 'forbidden messeage'})
+      }
+      next();
+    }
 
 
     app.get('/course', async(req, res) =>{
@@ -76,7 +89,7 @@ async function run() {
       })
 
 
-      // user add to Cart
+      // students add to Cart
 
       app.get('/cart', verifyJWT, async(req, res) =>{
         const email = req.query.email;
@@ -84,7 +97,6 @@ async function run() {
         if(!email){
          return res.send([])
         }
-      
         const decodedEmail = req.decoded.email;
         if(email !== decodedEmail){
           return res.status(401).send({error: true, message: 'forbiden access'})
@@ -101,8 +113,17 @@ async function run() {
         res.send(result);
       })
 
+      app.delete('/cart/:id', async (req, res) => {
+        const id = req.params.id;
+        // console.log(id);
+        const query = { _id: new ObjectId(id) };
+        const result = await addCourseCollection.deleteOne(query);
+        res.send(result);
+      })
+      
 
-// ----------- user releted database------
+
+// ----------- user set releted database------
 
 app.post('/users', async(req, res)=>{
   const user = req.body;
@@ -117,8 +138,29 @@ if(existingUser){
   res.send(result)
 })
 
+// -------- Enroll ---------
 
+app.get('/enroll', async(req, res) =>{
+  const cursor = EnrollCollection.find();
+  const result = await cursor.toArray();
+  // console.log(result)
+  res.send(result)
+})
 
+app.post('/enroll', async(req, res)=>{
+  const enroll = req.body;
+  // console.log(payment);
+  const insertResult =await EnrollCollection.insertOne(enroll);
+  res.send(insertResult);
+})
+
+app.delete('/cart/:id', async (req, res) => {
+  const id = req.params.id;
+  // console.log(id);
+  const query = { _id: new ObjectId(id) };
+  const result = await addCourseCollection.deleteOne(query);
+  res.send(result);
+})
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
